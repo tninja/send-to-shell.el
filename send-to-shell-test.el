@@ -1,5 +1,6 @@
 ;;; send-to-shell-test.el --- Tests for send-to-shell package
 
+(require 'cl-lib)
 (require 'ert)
 (require 'send-to-shell)
 
@@ -113,6 +114,41 @@
   (should (functionp 'send-to-shell--fallback-menu))
   (should (functionp 'send-to-shell--select-backend))
   (should (functionp 'send-to-shell--select-action)))
+
+(ert-deftest send-to-shell-test-transient-menu-switches-default-backend ()
+  "Test that transient backend selection updates the default backend."
+  (let ((send-to-shell-default-backend 'eshell))
+    (send-to-shell--transient-set-backend 'shell)
+    (should (eq send-to-shell-default-backend 'shell))))
+
+(ert-deftest send-to-shell-test-transient-menu-starts-shell-for-current-backend ()
+  "Test that transient start-shell uses the selected backend."
+  (let ((send-to-shell-default-backend 'shell)
+        (called-backend nil))
+    (cl-letf (((symbol-function 'send-to-shell-start-shell)
+               (lambda (backend)
+                 (setq called-backend backend))))
+      (send-to-shell--transient-start-shell)
+      (should (eq called-backend 'shell)))))
+
+(ert-deftest send-to-shell-test-transient-menu-sends-region-or-block-for-current-backend ()
+  "Test that transient send action uses the selected backend."
+  (let ((send-to-shell-default-backend 'shell)
+        (called-backend nil))
+    (cl-letf (((symbol-function 'send-to-shell-send-region-or-block)
+               (lambda (backend)
+                 (setq called-backend backend))))
+      (send-to-shell--transient-send-region-or-block)
+      (should (eq called-backend 'shell)))))
+
+(ert-deftest send-to-shell-test-transient-dispatcher-invokes-transient-menu ()
+  "Test that the transient dispatcher invokes the transient menu."
+  (let ((menu-called nil))
+    (cl-letf (((symbol-function 'send-to-shell-transient-menu)
+               (lambda ()
+                 (setq menu-called t))))
+      (send-to-shell--transient-dispatcher)
+      (should menu-called))))
 
 (provide 'send-to-shell-test)
 ;;; send-to-shell-test.el ends here
