@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 ;; send-to-shell provides a unified interface for sending code to various
-;; shell backends (eshell, shell, vterm, eat, ghostel) from source buffers.
+;; shell backends (shell, vterm, eat, ghostel) from source buffers.
 ;; Each source buffer gets its own dedicated shell buffer.
 
 ;;; Code:
@@ -12,10 +12,9 @@
   :group 'tools
   :prefix "send-to-shell-")
 
-(defcustom send-to-shell-default-backend 'eshell
+(defcustom send-to-shell-default-backend 'shell
   "Default shell backend to use."
-  :type '(choice (const eshell)
-                 (const shell)
+  :type '(choice (const shell)
                  (const vterm)
                  (const eat)
                  (const ghostel))
@@ -30,7 +29,7 @@
 
 (defun send-to-shell-get-available-backends ()
   "Return a list of available shell backends."
-  (let ((backends (list 'eshell 'shell)))
+  (let ((backends (list 'shell)))
     (when (featurep 'vterm)
       (push 'vterm backends))
     (when (featurep 'eat)
@@ -45,24 +44,13 @@
 
 ;;; Backend-Specific Implementations
 
-(defun send-to-shell--send-to-eshell (start end shell-buf-name)
-  "Send region to eshell buffer."
-  (let ((text (buffer-substring start end)))
-    (with-current-buffer (get-buffer-create shell-buf-name)
-      (unless (eq major-mode 'eshell-mode)
-        (eshell))
-      (goto-char (point-max))
-      (insert text)
-      (eshell-send-input))))
-
 (defun send-to-shell--send-to-shell (start end shell-buf-name)
   "Send region to shell buffer."
   (let ((text (buffer-substring start end)))
-    (with-current-buffer (get-buffer-create shell-buf-name)
-      (unless (eq major-mode 'shell-mode)
-        (ignore-errors (shell)))
-      (ignore-errors
-        (comint-send-string shell-buf-name (concat text "\n"))))))
+    (unless (comint-check-proc shell-buf-name)
+      (send-to-shell--start-named-shell shell-buf-name))
+    (ignore-errors
+      (comint-send-string shell-buf-name (concat text "\n")))))
 
 (defun send-to-shell--send-via-comint (start end shell-buf-name init-fn)
   "Send region to buffer via comint, initializing with INIT-FN if needed."
@@ -97,7 +85,6 @@
 START and END define the region to send."
   (let ((shell-buf-name (send-to-shell-get-shell-buffer-name)))
     (pcase backend
-      ('eshell (send-to-shell--send-to-eshell start end shell-buf-name))
       ('shell (send-to-shell--send-to-shell start end shell-buf-name))
       ('vterm (send-to-shell--send-to-vterm start end shell-buf-name))
       ('eat (send-to-shell--send-to-eat start end shell-buf-name))
@@ -133,16 +120,44 @@ If a region is active, send it. Otherwise send the current block."
       (funcall init-fn)
       (rename-buffer shell-buf-name))))
 
+(defun send-to-shell--display-buffer-in-other-window (buffer)
+  "Display BUFFER in another window and return the window."
+  (or (display-buffer
+       buffer
+       '((display-buffer-pop-up-window)
+         (inhibit-same-window . t)))
+      (selected-window)))
+
+(defun send-to-shell--start-buffer-with-mode-in-other-window (shell-buf-name mode init-fn)
+  "Start SHELL-BUF-NAME with MODE in another window using INIT-FN."
+  (with-selected-window
+      (send-to-shell--display-buffer-in-other-window
+       (get-buffer-create shell-buf-name))
+    (send-to-shell--start-buffer-with-mode shell-buf-name mode init-fn)))
+
+(defun send-to-shell--ensure-sh-mode ()
+  "Ensure `send-to-shell-start-shell' is called from `sh-mode'."
+  (unless (derived-mode-p 'sh-mode)
+    (user-error "send-to-shell-start-shell requires sh-mode")))
+
+(defun send-to-shell--start-named-shell (shell-buf-name)
+  "Start shell using SHELL-BUF-NAME."
+  (save-current-buffer
+    (ignore-errors (shell shell-buf-name))))
+
 (defun send-to-shell-start-shell (backend)
   "Start a shell buffer for the current buffer using BACKEND."
+  ;; DONE: shell should start in other window. It shouldn't overlap the source buffer.
+  ;; DONE: to use this command, current buffer major mode must be sh-mode, otherwise, just let user know the error
+  ;; DONE: started shell should have the same name as the source buffer, but with * around it. For example, if source buffer is test.sh, shell buffer should be *test.sh*. And corresponding send to shell command should send to *test.sh* buffer.
   (interactive (list send-to-shell-default-backend))
+  (send-to-shell--ensure-sh-mode)
   (let ((shell-buf-name (send-to-shell-get-shell-buffer-name)))
     (pcase backend
-      ('eshell
-       (send-to-shell--start-buffer-with-mode shell-buf-name 'eshell-mode #'eshell))
       ('shell
-       (send-to-shell--start-buffer-with-mode
-        shell-buf-name 'shell-mode (lambda () (ignore-errors (shell)))))
+       (send-to-shell--start-buffer-with-mode-in-other-window
+        shell-buf-name 'shell-mode
+        (lambda () (send-to-shell--start-named-shell shell-buf-name))))
       ('vterm
        (send-to-shell--start-buffer-if-missing
         shell-buf-name 'vterm #'vterm-other-window))
@@ -213,7 +228,7 @@ Shows an interactive menu (if transient available) or prompts for backend select
   (let* ((backends (send-to-shell-get-available-backends))
          (backend-names (mapcar #'symbol-name backends)))
     (intern (completing-read "Select shell backend: " backend-names
-                            nil t (symbol-name send-to-shell-default-backend)))))
+                             nil t nil nil nil))))
 
 (defun send-to-shell--select-action ()
   "Prompt user to select an action."
