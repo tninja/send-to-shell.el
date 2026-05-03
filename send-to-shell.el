@@ -231,8 +231,8 @@ If a region is active, send it. Otherwise send the current block."
   (interactive)
   (send-to-shell--transient-set-backend (send-to-shell--select-backend)))
 
-(defun send-to-shell--transient-start-shell ()
-  "Start a shell for `send-to-shell-default-backend'."
+(defun send-to-shell--transient-start-or-switch-shell ()
+  "Start or switch to a shell for `send-to-shell-default-backend'."
   (interactive)
   (send-to-shell-start-shell send-to-shell-default-backend))
 
@@ -259,7 +259,8 @@ If a region is active, send it. Otherwise send the current block."
   "Transient menu for send-to-shell."
   [["Backend"
     ("b" "Switch backend" send-to-shell--transient-select-backend)
-    ("s" "Start shell" send-to-shell--transient-start-shell)
+    ;; DONE: renamed the transient shell action to Start or switch to shell, and updated the corresponding function name to match the actual behavior when a shell already exists.
+    ("s" "Start or switch to shell" send-to-shell--transient-start-or-switch-shell)
     ("d" "Send region or block" send-to-shell--transient-send-region-or-block)]])
 
 (defun send-to-shell ()

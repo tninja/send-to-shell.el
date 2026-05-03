@@ -147,15 +147,24 @@
       (should (eq (send-to-shell--select-backend) 'shell))
       (should (null captured-initial-input)))))
 
-(ert-deftest send-to-shell-test-transient-menu-starts-shell-for-current-backend ()
-  "Test that transient start-shell uses the selected backend."
+(ert-deftest send-to-shell-test-transient-menu-starts-or-switches-shell-for-current-backend ()
+  "Test that transient start-or-switch-shell uses the selected backend."
   (let ((send-to-shell-default-backend 'shell)
         (called-backend nil))
     (cl-letf (((symbol-function 'send-to-shell-start-shell)
                (lambda (backend)
                  (setq called-backend backend))))
-      (send-to-shell--transient-start-shell)
+      (send-to-shell--transient-start-or-switch-shell)
       (should (eq called-backend 'shell)))))
+
+(ert-deftest send-to-shell-test-transient-menu-labels-shell-action-as-start-or-switch ()
+  "Test that transient menu labels the shell action as start or switch."
+  (let ((suffix (transient-get-suffix 'send-to-shell-transient-menu "s")))
+    (should suffix)
+    (should (equal (plist-get (nth 2 suffix) :description)
+                   "Start or switch to shell"))
+    (should (eq (plist-get (nth 2 suffix) :command)
+                'send-to-shell--transient-start-or-switch-shell))))
 
 (ert-deftest send-to-shell-test-transient-menu-sends-region-or-block-for-current-backend ()
   "Test that transient send action uses the selected backend."
