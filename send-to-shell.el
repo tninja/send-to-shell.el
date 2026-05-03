@@ -48,18 +48,63 @@
 
 (defun send-to-shell-get-available-backends ()
   "Return a list of available shell backends."
-  (let ((backends (list 'shell)))
-    (when (featurep 'vterm)
-      (push 'vterm backends))
-    (when (send-to-shell--feature-available-p 'eat)
-      (push 'eat backends))
-    (when (featurep 'ghostel)
-      (push 'ghostel backends))
-    (nreverse backends)))
+  (let (backends)
+    (dolist (backend send-to-shell--backend-definitions (nreverse backends))
+      (when (funcall (send-to-shell--backend-handler (car backend) :available))
+        (push (car backend) backends)))))
 
 (defun send-to-shell-get-shell-buffer-name ()
   "Get the shell buffer name for the current buffer."
   (format "*%s*" (buffer-name)))
+
+(defun send-to-shell--shell-backend-available-p ()
+  "Return non-nil when the shell backend is available."
+  t)
+
+(defun send-to-shell--vterm-backend-available-p ()
+  "Return non-nil when the vterm backend is available."
+  (featurep 'vterm))
+
+(defun send-to-shell--eat-backend-available-p ()
+  "Return non-nil when the eat backend is available."
+  (send-to-shell--feature-available-p 'eat))
+
+(defun send-to-shell--ghostel-backend-available-p ()
+  "Return non-nil when the ghostel backend is available."
+  (featurep 'ghostel))
+
+(defconst send-to-shell--backend-definitions
+  '((shell
+     :available send-to-shell--shell-backend-available-p
+     :send send-to-shell--send-to-shell
+     :start send-to-shell--start-shell-backend)
+    (vterm
+     :available send-to-shell--vterm-backend-available-p
+     :send send-to-shell--send-to-vterm
+     :start send-to-shell--start-vterm-backend)
+    (eat
+     :available send-to-shell--eat-backend-available-p
+     :send send-to-shell--send-to-eat
+     :start send-to-shell--start-eat-backend)
+    (ghostel
+     :available send-to-shell--ghostel-backend-available-p
+     :send send-to-shell--send-to-ghostel
+     :start send-to-shell--start-ghostel-backend))
+  "Backend configuration table for send-to-shell.")
+
+(defun send-to-shell--backend-property (backend property)
+  "Return PROPERTY from BACKEND definition."
+  (plist-get (cdr (assq backend send-to-shell--backend-definitions))
+             property))
+
+(defun send-to-shell--backend-handler (backend property)
+  "Return BACKEND handler function for PROPERTY."
+  (or (send-to-shell--backend-property backend property)
+      (error "Unknown backend: %s" backend)))
+
+(defun send-to-shell--call-backend-handler (backend property &rest args)
+  "Call BACKEND PROPERTY handler with ARGS."
+  (apply (send-to-shell--backend-handler backend property) args))
 
 ;;; Backend-Specific Implementations
 
@@ -153,12 +198,8 @@ Replace an existing placeholder buffer with that name when present."
   "Send region to shell buffer using specified BACKEND.
 START and END define the region to send."
   (let ((shell-buf-name (send-to-shell-get-shell-buffer-name)))
-    (pcase backend
-      ('shell (send-to-shell--send-to-shell start end shell-buf-name))
-      ('vterm (send-to-shell--send-to-vterm start end shell-buf-name))
-      ('eat (send-to-shell--send-to-eat start end shell-buf-name))
-      ('ghostel (send-to-shell--send-to-ghostel start end shell-buf-name))
-      (_ (error "Unknown backend: %s" backend)))))
+    (send-to-shell--call-backend-handler backend :send
+                                         start end shell-buf-name)))
 
 (defun send-to-shell-send-block (backend)
   "Send current block/paragraph to shell using BACKEND."
@@ -183,6 +224,26 @@ If a region is active, send it. Otherwise send the current block."
      (send-to-shell-send-region (line-beginning-position)
                                 (line-end-position)
                                 backend))))
+
+(defun send-to-shell--start-shell-backend (shell-buf-name)
+  "Start the shell backend using SHELL-BUF-NAME."
+  (send-to-shell--start-buffer-with-mode-in-other-window
+   shell-buf-name 'shell-mode
+   (lambda () (send-to-shell--start-named-shell shell-buf-name))))
+
+(defun send-to-shell--start-vterm-backend (shell-buf-name)
+  "Start the vterm backend using SHELL-BUF-NAME."
+  (send-to-shell--start-buffer-if-missing
+   shell-buf-name 'vterm #'vterm-other-window))
+
+(defun send-to-shell--start-eat-backend (shell-buf-name)
+  "Start the eat backend using SHELL-BUF-NAME."
+  (send-to-shell--start-named-eat-in-other-window shell-buf-name))
+
+(defun send-to-shell--start-ghostel-backend (shell-buf-name)
+  "Start the ghostel backend using SHELL-BUF-NAME."
+  (when (featurep 'ghostel)
+    (send-to-shell--start-named-ghostel-in-other-window shell-buf-name)))
 
 (defun send-to-shell--start-buffer-with-mode (shell-buf-name mode init-fn)
   "Start SHELL-BUF-NAME with MODE by calling INIT-FN when needed."
@@ -230,20 +291,7 @@ If a region is active, send it. Otherwise send the current block."
   (interactive (list send-to-shell-default-backend))
   (send-to-shell--ensure-sh-mode)
   (let ((shell-buf-name (send-to-shell-get-shell-buffer-name)))
-    (pcase backend
-      ('shell
-       (send-to-shell--start-buffer-with-mode-in-other-window
-        shell-buf-name 'shell-mode
-        (lambda () (send-to-shell--start-named-shell shell-buf-name))))
-      ('vterm
-       (send-to-shell--start-buffer-if-missing
-        shell-buf-name 'vterm #'vterm-other-window))
-      ('eat
-       (send-to-shell--start-named-eat-in-other-window shell-buf-name))
-      ('ghostel
-       (when (featurep 'ghostel)
-         (send-to-shell--start-named-ghostel-in-other-window shell-buf-name)))
-      (_ (error "Unknown backend: %s" backend)))))
+    (send-to-shell--call-backend-handler backend :start shell-buf-name)))
 
 (defun send-to-shell--transient-set-backend (backend)
   "Set `send-to-shell-default-backend' to BACKEND."
@@ -299,8 +347,16 @@ If a region is active, send it. Otherwise send the current block."
     ;; DONE: send region, block, or current line now reports a user error and quits when the corresponding shell does not exist.
     ("d" "Send region or block" send-to-shell--transient-send-region-or-block)
     ;; DONE: added a transient menu item for sending the current line.
-    ("n" "Send current line" send-to-shell--transient-send-current-line)
+    ("l" "Send current line" send-to-shell--transient-send-current-line)
     ]])
+
+(defun send-to-shell ()
+  "Main entry point for send-to-shell package.
+Shows an interactive menu (if transient available) or prompts for backend selection."
+  (interactive)
+  (if (require 'transient nil t)
+      (send-to-shell--transient-dispatcher)
+    (send-to-shell--fallback-menu)))
 
 (defun send-to-shell--select-backend ()
   "Prompt user to select a shell backend."
@@ -308,6 +364,34 @@ If a region is active, send it. Otherwise send the current block."
          (backend-names (mapcar #'symbol-name backends)))
     (intern (completing-read "Select shell backend: " backend-names
                              nil t nil nil nil))))
+
+(defun send-to-shell--fallback-menu ()
+  "Fallback menu when transient is not available."
+  (let* ((backend (send-to-shell--select-backend))
+         (action (send-to-shell--select-action)))
+    (send-to-shell--perform-action action backend)))
+
+(defun send-to-shell--select-action ()
+  "Prompt user to select an action."
+  (let ((actions '(("Send region" . region)
+                   ("Send block" . block)
+                   ("Send region or block" . region-or-block)
+                   ("Send current line" . current-line))))
+    (cdr (assoc (completing-read "Select action: " (mapcar #'car actions) nil t)
+                actions))))
+
+(defun send-to-shell--perform-action (action backend)
+  "Perform the selected ACTION using the specified BACKEND."
+  (pcase action
+    ('region (send-to-shell-send-region (region-beginning) (region-end) backend))
+    ('block (send-to-shell-send-block backend))
+    ('region-or-block (send-to-shell-send-region-or-block backend))
+    ('current-line (send-to-shell-send-current-line backend))
+    (_ (message "Unknown action: %s" action))))
+
+(defun send-to-shell--transient-dispatcher ()
+  "Dispatcher for the transient menu."
+  (send-to-shell-transient-menu))
 
 ;; DONE: similar to /home/tninja/.emacs.d/.emacs/languages.el, added an interactive function to register sh-mode keybindings for switch-to-shell, send-current-line, and send-region-or-block.
 
