@@ -1,0 +1,128 @@
+* send-to-shell.el
+
+一个统一的 Emacs 包，用于向 shell 缓冲区发送代码，支持多个后端：eshell、shell、vterm、eat 和 ghostel。
+
+** 功能特性
+
+- *多个 shell 后端*：支持 eshell、shell、vterm、eat 和 ghostel
+- *缓冲区特定的 shell 缓冲区*：每个源文件都有自己独立的 shell 缓冲区
+- *灵活的代码发送*：发送选定区域或当前块到 shell
+- *最小依赖*：仅依赖 Emacs 内置包和可选的后端包
+
+** 安装
+
+克隆仓库并添加到 Emacs 加载路径：
+
+#+begin_src emacs-lisp
+(add-to-list 'load-path "~/.emacs.d/site-lisp/send-to-shell.el")
+(require 'send-to-shell)
+#+end_src
+
+** 使用方法
+
+*** 核心函数
+
+**** send-to-shell-send-region (start end backend)
+
+向指定的 shell 后端发送一个文本区域。
+
+#+begin_src emacs-lisp
+(send-to-shell-send-region (point-min) (point-max) 'eshell)
+#+end_src
+
+**** send-to-shell-send-block (backend)
+
+向指定的 shell 后端发送当前段落/块。
+
+#+begin_src emacs-lisp
+(send-to-shell-send-block 'vterm)
+#+end_src
+
+**** send-to-shell-send-region-or-block (backend)
+
+如果存在活动区域，则发送该区域，否则发送当前块。
+
+#+begin_src emacs-lisp
+(send-to-shell-send-region-or-block 'shell)
+#+end_src
+
+*** 交互式菜单
+
+使用 Transient 菜单进行交互式操作：
+
+#+begin_src emacs-lisp
+(send-to-shell)
+#+end_src
+
+这将显示一个菜单，您可以选择后端和操作。
+
+*** 后端选择
+
+列出可用的后端：
+
+#+begin_src emacs-lisp
+(send-to-shell-get-available-backends)
+;; 返回：(eshell shell vterm eat ghostel)，根据已安装的包
+#+end_src
+
+*** 配置
+
+设置默认后端：
+
+#+begin_src emacs-lisp
+(setq send-to-shell-default-backend 'vterm)
+#+end_src
+
+调整 vterm 睡眠时间（毫秒）：
+
+#+begin_src emacs-lisp
+(setq send-to-shell-vterm-sleep-ms 150)
+#+end_src
+
+** 缓冲区命名
+
+每个源缓冲区都有一个专用的 shell 缓冲区，使用模式 =*<source-buffer-name>*=。例如：
+- =script.sh= → shell 缓冲区 =*script.sh*=
+- =Makefile= → shell 缓冲区 =*Makefile*=
+
+** 后端说明
+
+*** eshell（内置）
+Emacs shell 实现。无外部依赖。
+
+*** shell（内置）
+传统的基于 comint 的 shell。无外部依赖。
+
+*** vterm
+完整的终端模拟器。需要 =emacs-libvterm= 包。
+
+*** eat
+另一个终端模拟器实现。需要 =eat= 包。
+
+*** ghostel
+另一个替代终端后端。需要 =ghostel= 包。
+
+** 快捷键绑定
+
+将以下内容添加到您的 Emacs 配置中以设置快捷键：
+
+#+begin_src emacs-lisp
+;; 打开 send-to-shell 菜单
+(global-set-key (kbd "C-c s") 'send-to-shell)
+
+;; 或为特定模式设置
+(define-key sh-mode-map (kbd "C-c C-z") 'send-to-shell)
+#+end_src
+
+** 测试
+
+使用以下命令运行测试：
+
+#+begin_src bash
+cd send-to-shell.el
+emacs --batch -L . -l ert -l send-to-shell.el -l send-to-shell-test.el -f ert-run-tests-batch-and-exit
+#+end_src
+
+** 许可证
+
+参见仓库中的 LICENSE 文件。

@@ -106,5 +106,13 @@
       (send-to-shell-send-region-or-block 'eshell)
       (should (equal (point) old-point)))))
 
+(ert-deftest send-to-shell-test-transient-menu-requires-transient ()
+  "Test that transient menu dispatcher is callable."
+  ;; Just verify the function exists and is callable
+  (should (functionp 'send-to-shell))
+  (should (functionp 'send-to-shell--fallback-menu))
+  (should (functionp 'send-to-shell--select-backend))
+  (should (functionp 'send-to-shell--select-action)))
+
 (provide 'send-to-shell-test)
 ;;; send-to-shell-test.el ends here

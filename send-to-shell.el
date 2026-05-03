@@ -126,5 +126,47 @@ This function requires transient package."
   ;; TODO: Implement transient menu in a future version
   (message "Transient menu not yet implemented"))
 
+(defun send-to-shell ()
+  "Main entry point for send-to-shell package.
+Shows an interactive menu (if transient available) or prompts for backend selection."
+  (interactive)
+  (if (featurep 'transient)
+      (send-to-shell--transient-dispatcher)
+    (send-to-shell--fallback-menu)))
+
+(defun send-to-shell--fallback-menu ()
+  "Fallback menu when transient is not available."
+  (let* ((backend (send-to-shell--select-backend))
+         (action (send-to-shell--select-action)))
+    (send-to-shell--perform-action action backend)))
+
+(defun send-to-shell--select-backend ()
+  "Prompt user to select a shell backend."
+  (let* ((backends (send-to-shell-get-available-backends))
+         (backend-names (mapcar #'symbol-name backends)))
+    (intern (completing-read "Select shell backend: " backend-names
+                            nil t (symbol-name send-to-shell-default-backend)))))
+
+(defun send-to-shell--select-action ()
+  "Prompt user to select an action."
+  (let ((actions '(("Send region" . region)
+                   ("Send block" . block)
+                   ("Send region or block" . region-or-block))))
+    (cdr (assoc (completing-read "Select action: " (mapcar #'car actions) nil t)
+               actions))))
+
+(defun send-to-shell--perform-action (action backend)
+  "Perform the selected ACTION using the specified BACKEND."
+  (pcase action
+    ('region (send-to-shell-send-region (region-beginning) (region-end) backend))
+    ('block (send-to-shell-send-block backend))
+    ('region-or-block (send-to-shell-send-region-or-block backend))
+    (_ (message "Unknown action: %s" action))))
+
+(defun send-to-shell--transient-dispatcher ()
+  "Dispatcher for transient menu (future implementation)."
+  (message "Transient menu not yet fully implemented. Using fallback menu.")
+  (send-to-shell--fallback-menu))
+
 (provide 'send-to-shell)
 ;;; send-to-shell.el ends here
