@@ -302,20 +302,6 @@ If a region is active, send it. Otherwise send the current block."
     ("n" "Send current line" send-to-shell--transient-send-current-line)
     ]])
 
-(defun send-to-shell ()
-  "Main entry point for send-to-shell package.
-Shows an interactive menu (if transient available) or prompts for backend selection."
-  (interactive)
-  (if (require 'transient nil t)
-      (send-to-shell--transient-dispatcher)
-    (send-to-shell--fallback-menu)))
-
-(defun send-to-shell--fallback-menu ()
-  "Fallback menu when transient is not available."
-  (let* ((backend (send-to-shell--select-backend))
-         (action (send-to-shell--select-action)))
-    (send-to-shell--perform-action action backend)))
-
 (defun send-to-shell--select-backend ()
   "Prompt user to select a shell backend."
   (let* ((backends (send-to-shell-get-available-backends))
@@ -340,10 +326,6 @@ Shows an interactive menu (if transient available) or prompts for backend select
     ('region-or-block (send-to-shell-send-region-or-block backend))
     ('current-line (send-to-shell-send-current-line backend))
     (_ (message "Unknown action: %s" action))))
-
-(defun send-to-shell--transient-dispatcher ()
-  "Dispatcher for the transient menu."
-  (send-to-shell-transient-menu))
 
 (provide 'send-to-shell)
 ;;; send-to-shell.el ends here
