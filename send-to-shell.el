@@ -7,6 +7,14 @@
 
 ;;; Code:
 
+;; DONE: ghostel backend start shell now starts in other window without overlapping the source buffer. See /home/tninja/.emacs.d/elpa/ghostel-20260502.2158 for upstream window behavior details.
+
+;; TODO: ghostel backend start report wrong number of argument, 5
+
+;; DONE: the eat backend now loads the eat library on demand and starts it in another window, so start shell no longer silently does nothing when eat is installed but not yet loaded.
+
+;; DONE: eat started buffer now gets renamed from *eat* to the source buffer name, so if the source buffer is test.sh the eat buffer becomes *test.sh*.
+
 (defgroup send-to-shell nil
   "Send code to shell buffers with multiple backends."
   :group 'tools
@@ -27,12 +35,23 @@
 
 ;;; Backend Management
 
+(defun send-to-shell--feature-available-p (feature)
+  "Return non-nil when FEATURE is loaded or its library is installed."
+  (or (featurep feature)
+      (locate-library (symbol-name feature))))
+
+(defun send-to-shell--load-feature-if-available (feature)
+  "Return non-nil when FEATURE is loaded or can be loaded."
+  (or (featurep feature)
+      (and (locate-library (symbol-name feature))
+           (require feature nil t))))
+
 (defun send-to-shell-get-available-backends ()
   "Return a list of available shell backends."
   (let ((backends (list 'shell)))
     (when (featurep 'vterm)
       (push 'vterm backends))
-    (when (featurep 'eat)
+    (when (send-to-shell--feature-available-p 'eat)
       (push 'eat backends))
     (when (featurep 'ghostel)
       (push 'ghostel backends))
@@ -73,10 +92,44 @@
   (when (featurep 'eat)
     (send-to-shell--send-via-comint start end shell-buf-name #'eat)))
 
+(defun send-to-shell--rename-current-buffer-to (shell-buf-name)
+  "Rename the current buffer to SHELL-BUF-NAME.
+Replace an existing placeholder buffer with that name when present."
+  (unless (equal (buffer-name) shell-buf-name)
+    (when (get-buffer shell-buf-name)
+      (kill-buffer shell-buf-name))
+    (rename-buffer shell-buf-name)))
+
+(defun send-to-shell--start-named-eat-in-other-window (shell-buf-name)
+  "Start eat in another window and rename its terminal buffer to SHELL-BUF-NAME."
+  (when (send-to-shell--load-feature-if-available 'eat)
+    (let* ((existing-buffer (get-buffer shell-buf-name))
+           (window
+            (send-to-shell--display-buffer-in-other-window
+             (or existing-buffer (current-buffer)))))
+      (with-selected-window window
+        (unless (derived-mode-p 'eat-mode)
+          (eat)
+          (with-current-buffer (window-buffer window)
+            (send-to-shell--rename-current-buffer-to shell-buf-name)))))))
+
+(defun send-to-shell--start-named-ghostel-in-other-window (shell-buf-name)
+  "Start ghostel using SHELL-BUF-NAME in another window."
+  (let ((ghostel-buffer-name shell-buf-name))
+    (with-selected-window
+        (send-to-shell--display-buffer-in-other-window
+         (get-buffer-create shell-buf-name))
+      (unless (derived-mode-p 'ghostel-mode)
+        (ghostel)))))
+
 (defun send-to-shell--send-to-ghostel (start end shell-buf-name)
   "Send region to ghostel buffer."
   (when (featurep 'ghostel)
-    (send-to-shell--send-via-comint start end shell-buf-name #'ghostel)))
+    (let ((text (buffer-substring start end)))
+      (unless (get-buffer shell-buf-name)
+        (send-to-shell--start-named-ghostel-in-other-window shell-buf-name))
+      (comint-send-string shell-buf-name text)
+      (comint-send-string shell-buf-name "\n"))))
 
 ;;; Core Functions
 
@@ -162,10 +215,10 @@ If a region is active, send it. Otherwise send the current block."
        (send-to-shell--start-buffer-if-missing
         shell-buf-name 'vterm #'vterm-other-window))
       ('eat
-       (send-to-shell--start-buffer-if-missing shell-buf-name 'eat #'eat))
+       (send-to-shell--start-named-eat-in-other-window shell-buf-name))
       ('ghostel
-       (send-to-shell--start-buffer-if-missing
-        shell-buf-name 'ghostel #'ghostel))
+       (when (featurep 'ghostel)
+         (send-to-shell--start-named-ghostel-in-other-window shell-buf-name)))
       (_ (error "Unknown backend: %s" backend)))))
 
 (defun send-to-shell--transient-set-backend (backend)

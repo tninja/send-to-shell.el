@@ -22,11 +22,26 @@
       (should (not (member 'vterm backends))))))
 
 (ert-deftest send-to-shell-test-backend-available-eat ()
-  "Test that eat backend is available if installed."
-  (let ((backends (send-to-shell-get-available-backends)))
-    (if (featurep 'eat)
-        (should (member 'eat backends))
-      (should (not (member 'eat backends))))))
+  "Test that eat backend is available when installed or loaded."
+  (cl-letf (((symbol-function 'featurep)
+             (lambda (feature)
+               (not (eq feature 'eat))))
+            ((symbol-function 'locate-library)
+             (lambda (library)
+               (when (equal library "eat")
+                 "/tmp/eat.el"))))
+    (should (member 'eat (send-to-shell-get-available-backends)))))
+
+(ert-deftest send-to-shell-test-backend-unavailable-eat-without-library ()
+  "Test that eat backend is hidden when unavailable."
+  (cl-letf (((symbol-function 'featurep)
+             (lambda (feature)
+               (not (eq feature 'eat))))
+            ((symbol-function 'locate-library)
+             (lambda (library)
+               (unless (equal library "eat")
+                 "/tmp/other.el"))))
+    (should-not (member 'eat (send-to-shell-get-available-backends)))))
 
 (ert-deftest send-to-shell-test-backend-available-ghostel ()
   "Test that ghostel backend is available if installed."
@@ -218,6 +233,167 @@
             (when process
               (set-process-query-on-exit-flag process nil)))
           (kill-buffer "*shell*"))
+        (kill-buffer source-buffer)))))
+
+(ert-deftest send-to-shell-test-start-shell-opens-eat-in-other-window-when-installed ()
+  "Test that starting eat loads it and keeps the source buffer visible."
+  (save-window-excursion
+    (delete-other-windows)
+    (let* ((source-buffer (generate-new-buffer "eat-source.sh"))
+           (shell-buffer-name "*eat-source.sh*")
+           (eat-loaded nil)
+           (require-called nil))
+      (unwind-protect
+          (progn
+            (set-window-buffer (selected-window) source-buffer)
+            (with-current-buffer source-buffer
+              (sh-mode)
+              (cl-letf (((symbol-function 'featurep)
+                         (lambda (feature)
+                           (if (eq feature 'eat)
+                               eat-loaded
+                             nil)))
+                        ((symbol-function 'locate-library)
+                         (lambda (library)
+                           (when (equal library "eat")
+                             "/tmp/eat.el")))
+                        ((symbol-function 'require)
+                         (lambda (feature &optional _filename _noerror)
+                           (when (eq feature 'eat)
+                             (setq require-called t
+                                   eat-loaded t))
+                           feature))
+                        ((symbol-function 'eat)
+                         (lambda ()
+                           (switch-to-buffer (get-buffer-create shell-buffer-name))
+                           (setq major-mode 'eat-mode))))
+                (send-to-shell-start-shell 'eat)
+                (should require-called)
+                (should (= (count-windows) 2))
+                (should (eq (window-buffer (selected-window)) source-buffer))
+                (should (get-buffer-window shell-buffer-name))
+                (should-not (eq (selected-window)
+                                (get-buffer-window shell-buffer-name))))))
+        (when (get-buffer shell-buffer-name)
+          (kill-buffer shell-buffer-name))
+        (kill-buffer source-buffer)))))
+
+(ert-deftest send-to-shell-test-start-shell-renames-eat-buffer-to-source-buffer-name ()
+  "Test that starting eat renames its default buffer to match the source buffer."
+  (save-window-excursion
+    (delete-other-windows)
+    (let ((source-buffer (generate-new-buffer "test.sh"))
+          (eat-loaded nil)
+          (require-called nil))
+      (unwind-protect
+          (progn
+            (set-window-buffer (selected-window) source-buffer)
+            (with-current-buffer source-buffer
+              (sh-mode)
+              (cl-letf (((symbol-function 'featurep)
+                         (lambda (feature)
+                           (if (eq feature 'eat)
+                               eat-loaded
+                             nil)))
+                        ((symbol-function 'locate-library)
+                         (lambda (library)
+                           (when (equal library "eat")
+                             "/tmp/eat.el")))
+                        ((symbol-function 'require)
+                         (lambda (feature &optional _filename _noerror)
+                           (when (eq feature 'eat)
+                             (setq require-called t
+                                   eat-loaded t))
+                           feature))
+                        ((symbol-function 'eat)
+                         (lambda ()
+                           (let ((eat-buffer (get-buffer-create "*eat*")))
+                             (with-current-buffer eat-buffer
+                               (setq major-mode 'eat-mode))
+                             (set-window-buffer (selected-window) eat-buffer)))))
+                (send-to-shell-start-shell 'eat)
+                (should require-called)
+                (should (get-buffer "*test.sh*"))
+                (should-not (get-buffer "*eat*"))
+                (should (eq (window-buffer (selected-window)) source-buffer))
+                (should (get-buffer-window "*test.sh*"))
+                (with-current-buffer "*test.sh*"
+                  (should (eq major-mode 'eat-mode))))))
+        (when (get-buffer "*eat*")
+          (kill-buffer "*eat*"))
+        (when (get-buffer "*test.sh*")
+          (kill-buffer "*test.sh*"))
+        (kill-buffer source-buffer)))))
+
+(ert-deftest send-to-shell-test-start-shell-opens-ghostel-in-other-window ()
+  "Test that starting ghostel keeps the source buffer visible."
+  (save-window-excursion
+    (delete-other-windows)
+    (let* ((source-buffer (generate-new-buffer "ghostel-source.sh"))
+           (shell-buffer-name "*ghostel-source.sh*")
+           (ghostel-buffer-name "*ghostel*")
+           (orig-featurep (symbol-function 'featurep)))
+      (unwind-protect
+          (progn
+            (set-window-buffer (selected-window) source-buffer)
+            (with-current-buffer source-buffer
+              (sh-mode)
+              (cl-letf (((symbol-function 'featurep)
+                         (lambda (feature)
+                           (if (eq feature 'ghostel)
+                               t
+                             (funcall orig-featurep feature))))
+                        ((symbol-function 'ghostel)
+                         (lambda ()
+                           (switch-to-buffer (get-buffer-create ghostel-buffer-name))
+                           (setq major-mode 'ghostel-mode))))
+                (send-to-shell-start-shell 'ghostel)
+                (should (= (count-windows) 2))
+                (should (eq (window-buffer (selected-window)) source-buffer))
+                (should (get-buffer-window shell-buffer-name))
+                (should-not (eq (selected-window)
+                                (get-buffer-window shell-buffer-name))))))
+        (when (get-buffer shell-buffer-name)
+          (kill-buffer shell-buffer-name))
+        (when (get-buffer "*ghostel*")
+          (kill-buffer "*ghostel*"))
+        (kill-buffer source-buffer)))))
+
+(ert-deftest send-to-shell-test-send-region-to-ghostel-opens-in-other-window ()
+  "Test that first send to ghostel keeps the source buffer visible."
+  (save-window-excursion
+    (delete-other-windows)
+    (let* ((source-buffer (generate-new-buffer "ghostel-send.sh"))
+           (shell-buffer-name "*ghostel-send.sh*")
+           (ghostel-buffer-name "*ghostel*")
+           (orig-featurep (symbol-function 'featurep)))
+      (unwind-protect
+          (progn
+            (set-window-buffer (selected-window) source-buffer)
+            (with-current-buffer source-buffer
+              (insert "echo hello")
+              (sh-mode)
+              (cl-letf (((symbol-function 'featurep)
+                         (lambda (feature)
+                           (if (eq feature 'ghostel)
+                               t
+                             (funcall orig-featurep feature))))
+                        ((symbol-function 'ghostel)
+                         (lambda ()
+                           (switch-to-buffer (get-buffer-create ghostel-buffer-name))
+                           (setq major-mode 'ghostel-mode)))
+                        ((symbol-function 'comint-send-string)
+                         (lambda (&rest _args) nil)))
+                (send-to-shell-send-region (point-min) (point-max) 'ghostel)
+                (should (= (count-windows) 2))
+                (should (eq (window-buffer (selected-window)) source-buffer))
+                (should (get-buffer-window shell-buffer-name))
+                (should-not (eq (selected-window)
+                                (get-buffer-window shell-buffer-name))))))
+        (when (get-buffer shell-buffer-name)
+          (kill-buffer shell-buffer-name))
+        (when (get-buffer "*ghostel*")
+          (kill-buffer "*ghostel*"))
         (kill-buffer source-buffer)))))
 
 (provide 'send-to-shell-test)
