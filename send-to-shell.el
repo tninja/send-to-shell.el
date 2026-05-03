@@ -336,19 +336,20 @@ If a region is active, send it. Otherwise send the current block."
 (defvar send-to-shell--transient-prefix-command nil
   "Internal transient prefix command for `send-to-shell'.")
 
-(transient-define-prefix send-to-shell-transient-menu ()
-  "Transient menu for send-to-shell."
-  [["Backend"
-    ;; DONE: similar to ai-code--select-backend-description in ai-code.el, the Switch backend menu item now shows the currently selected backend.
-    ("b" send-to-shell--transient-select-backend
-     :description send-to-shell--select-backend-description)
-    ;; DONE: renamed the transient shell action to Start or switch to shell, and updated the corresponding function name to match the actual behavior when a shell already exists.
-    ("s" "Start or switch to shell" send-to-shell--transient-start-or-switch-shell)
-    ;; DONE: send region, block, or current line now reports a user error and quits when the corresponding shell does not exist.
-    ("d" "Send region or block" send-to-shell--transient-send-region-or-block)
-    ;; DONE: added a transient menu item for sending the current line.
-    ("l" "Send current line" send-to-shell--transient-send-current-line)
-    ]])
+(eval-after-load 'transient
+  '(transient-define-prefix send-to-shell-transient-menu ()
+     "Transient menu for send-to-shell."
+     [["Backend"
+       ;; DONE: similar to ai-code--select-backend-description in ai-code.el, the Switch backend menu item now shows the currently selected backend.
+       ("b" send-to-shell--transient-select-backend
+        :description send-to-shell--select-backend-description)
+       ;; DONE: renamed the transient shell action to Start or switch to shell, and updated the corresponding function name to match the actual behavior when a shell already exists.
+       ("z" "Start or switch to shell" send-to-shell--transient-start-or-switch-shell)
+       ;; DONE: send region, block, or current line now reports a user error and quits when the corresponding shell does not exist.
+       ("c" "Send region or block" send-to-shell--transient-send-region-or-block)
+       ;; DONE: added a transient menu item for sending the current line.
+       ("n" "Send current line" send-to-shell--transient-send-current-line)
+       ]]))
 
 (defun send-to-shell ()
   "Main entry point for send-to-shell package.
@@ -399,6 +400,8 @@ Shows an interactive menu (if transient available) or prompts for backend select
   "Register send-to-shell keybindings for `sh-mode'."
   (interactive)
   (require 'sh-script)
+  (define-key sh-mode-map (kbd "C-c C-s")
+              #'send-to-shell)
   (define-key sh-mode-map (kbd "C-c C-z")
               #'send-to-shell--transient-start-or-switch-shell)
   (define-key sh-mode-map (kbd "C-c C-n")

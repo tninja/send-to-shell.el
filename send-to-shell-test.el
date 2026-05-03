@@ -6,6 +6,22 @@
 
 ;;; Test suite for transient menu and backend selection
 
+(defun send-to-shell-test--require-transient ()
+  "Load transient for tests that inspect transient definitions."
+  (unless (require 'transient nil t)
+    (ert-skip "transient is not available in this Emacs environment")))
+
+(defun send-to-shell-test--suffix-properties (suffix)
+  "Return the property plist from transient SUFFIX."
+  (or (and (listp suffix)
+           (listp (nth 2 suffix))
+           (nth 2 suffix))
+      (and (consp suffix)
+           (listp (cdr suffix))
+           (keywordp (car (cdr suffix)))
+           (cdr suffix))
+      (error "Unsupported transient suffix structure: %S" suffix)))
+
 (ert-deftest send-to-shell-test-backend-unavailable-eshell ()
   "Test that eshell backend is no longer available."
   (should-not (member 'eshell (send-to-shell-get-available-backends))))
@@ -161,11 +177,13 @@
 
 (ert-deftest send-to-shell-test-transient-menu-labels-backend-action-dynamically ()
   "Test that transient menu uses a dynamic description for backend selection."
-  (let ((suffix (transient-get-suffix 'send-to-shell-transient-menu "b")))
+  (send-to-shell-test--require-transient)
+  (let* ((suffix (transient-get-suffix 'send-to-shell-transient-menu "b"))
+         (props (send-to-shell-test--suffix-properties suffix)))
     (should suffix)
-    (should (eq (plist-get (nth 2 suffix) :command)
+    (should (eq (plist-get props :command)
                 'send-to-shell--transient-select-backend))
-    (should (eq (plist-get (nth 2 suffix) :description)
+    (should (eq (plist-get props :description)
                 'send-to-shell--select-backend-description))))
 
 (ert-deftest send-to-shell-test-select-backend-does-not-prefill-default-value ()
@@ -192,11 +210,13 @@
 
 (ert-deftest send-to-shell-test-transient-menu-labels-shell-action-as-start-or-switch ()
   "Test that transient menu labels the shell action as start or switch."
-  (let ((suffix (transient-get-suffix 'send-to-shell-transient-menu "s")))
+  (send-to-shell-test--require-transient)
+  (let* ((suffix (transient-get-suffix 'send-to-shell-transient-menu "z"))
+         (props (send-to-shell-test--suffix-properties suffix)))
     (should suffix)
-    (should (equal (plist-get (nth 2 suffix) :description)
+    (should (equal (plist-get props :description)
                    "Start or switch to shell"))
-    (should (eq (plist-get (nth 2 suffix) :command)
+    (should (eq (plist-get props :command)
                 'send-to-shell--transient-start-or-switch-shell))))
 
 (ert-deftest send-to-shell-test-transient-menu-sends-current-line-for-current-backend ()
@@ -211,11 +231,13 @@
 
 (ert-deftest send-to-shell-test-transient-menu-labels-current-line-action ()
   "Test that transient menu exposes the current-line action."
-  (let ((suffix (transient-get-suffix 'send-to-shell-transient-menu "l")))
+  (send-to-shell-test--require-transient)
+  (let* ((suffix (transient-get-suffix 'send-to-shell-transient-menu "n"))
+         (props (send-to-shell-test--suffix-properties suffix)))
     (should suffix)
-    (should (equal (plist-get (nth 2 suffix) :description)
+    (should (equal (plist-get props :description)
                    "Send current line"))
-    (should (eq (plist-get (nth 2 suffix) :command)
+    (should (eq (plist-get props :command)
                 'send-to-shell--transient-send-current-line))))
 
 (ert-deftest send-to-shell-test-transient-menu-sends-region-or-block-for-current-backend ()
