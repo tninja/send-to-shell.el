@@ -1,10 +1,10 @@
 * send-to-shell.el
 
-A unified Emacs package for sending code to shell buffers with support for multiple backends: eshell, shell, vterm, eat, and ghostel.
+A unified Emacs package for sending code to shell buffers with support for multiple backends: shell, vterm, eat, and ghostel.
 
 ** Features
 
-- *Multiple shell backends*: Support for eshell, shell, vterm, eat, and ghostel
+- *Multiple shell backends*: Support for shell, vterm, eat, and ghostel
 - *Buffer-specific shell buffers*: Each source file gets its own dedicated shell buffer
 - *Flexible code sending*: Send selected regions or current blocks to shell
 - *Minimal dependencies*: Only depends on Emacs built-in packages (with optional shell backends)
@@ -29,7 +29,7 @@ The primary entry point for send-to-shell is the interactive command:
 #+end_src
 
 This shows an interactive menu where you can select:
-- A shell backend (eshell, shell, vterm, eat, ghostel)
+- A shell backend (shell, vterm, eat, ghostel)
 - An action (send region, send block, or send region-or-block)
 
 *** Core Functions
@@ -39,7 +39,7 @@ This shows an interactive menu where you can select:
 Send a region of text to the specified shell backend.
 
 #+begin_src emacs-lisp
-(send-to-shell-send-region (point-min) (point-max) 'eshell)
+(send-to-shell-send-region (point-min) (point-max) 'shell)
 #+end_src
 
 **** send-to-shell-send-block (backend)
@@ -64,7 +64,7 @@ List available backends:
 
 #+begin_src emacs-lisp
 (send-to-shell-get-available-backends)
-;; Returns: (eshell shell vterm eat ghostel) based on what's installed
+;; Returns: (shell vterm eat ghostel) based on what's installed
 #+end_src
 
 *** Configuration
@@ -88,9 +88,6 @@ Each source buffer gets a dedicated shell buffer using the pattern =*<source-buf
 - =Makefile= → shell buffer =*Makefile*=
 
 ** Supported Backends
-
-*** eshell (Built-in)
-Emacs shell implementation. No external dependencies required.
 
 *** shell (Built-in)
 Traditional comint-based shell. No external dependencies required.
