@@ -65,32 +65,31 @@
           (end (point-max)))
       (should-error (send-to-shell-send-region start end 'eshell)))))
 
-(ert-deftest send-to-shell-test-send-region-to-shell ()
-  "Test sending region to shell backend."
+(ert-deftest send-to-shell-test-send-region-to-shell-errors-without-shell ()
+  "Test sending region to shell backend errors when shell is missing."
   (with-temp-buffer
     (insert "echo hello")
     (let ((start (point-min))
           (end (point-max)))
-      ;; Verify the function executes without error
-      (send-to-shell-send-region start end 'shell))))
+      (should-error (send-to-shell-send-region start end 'shell)
+                    :type 'user-error))))
 
 (ert-deftest send-to-shell-test-send-region-to-vterm ()
-  "Test sending region to vterm backend when available."
+  "Test sending region to vterm backend errors when shell is missing."
   (when (featurep 'vterm)
     (with-temp-buffer
       (insert "echo hello")
       (let ((start (point-min))
             (end (point-max)))
-        ;; Verify the function executes without error
-        (send-to-shell-send-region start end 'vterm)))))
+        (should-error (send-to-shell-send-region start end 'vterm)
+                      :type 'user-error)))))
 
-(ert-deftest send-to-shell-test-send-block ()
-  "Test sending block (paragraph) to shell."
+(ert-deftest send-to-shell-test-send-block-errors-without-shell ()
+  "Test sending block errors when shell is missing."
   (with-temp-buffer
     (insert "echo hello\n\necho world")
     (goto-char (point-min))
-    ;; Verify the function executes without error
-    (send-to-shell-send-block 'shell)))
+    (should-error (send-to-shell-send-block 'shell) :type 'user-error)))
 
 (ert-deftest send-to-shell-test-send-block-moves-point ()
   "Test that send-block preserves point position."
@@ -98,8 +97,10 @@
     (insert "echo hello\n\necho world")
     (goto-char 6)
     (let ((old-point (point)))
-      (send-to-shell-send-block 'shell)
-      (should (equal (point) old-point)))))
+      (cl-letf (((symbol-function 'send-to-shell-send-region)
+                 (lambda (&rest _args) nil)))
+        (send-to-shell-send-block 'shell)
+        (should (equal (point) old-point))))))
 
 (ert-deftest send-to-shell-test-send-region-or-block-with-region ()
   "Test send-region-or-block uses region when available."
@@ -107,9 +108,14 @@
     (insert "echo hello\necho world")
     (set-mark (point-min))
     (goto-char (+ (point-min) 5))
-    (let ((old-point (point)))
-      (send-to-shell-send-region-or-block 'shell)
-      (should (equal (point) old-point)))))
+    (let ((old-point (point))
+          (called nil))
+      (cl-letf (((symbol-function 'send-to-shell-send-region)
+                 (lambda (&rest _args)
+                   (setq called t))))
+        (send-to-shell-send-region-or-block 'shell)
+        (should called)
+        (should (equal (point) old-point))))))
 
 (ert-deftest send-to-shell-test-send-region-or-block-no-region ()
   "Test send-region-or-block sends block when no region."
@@ -117,9 +123,21 @@
     (insert "echo hello\n\necho world")
     (goto-char 6)
     (deactivate-mark)
-    (let ((old-point (point)))
-      (send-to-shell-send-region-or-block 'shell)
-      (should (equal (point) old-point)))))
+    (let ((old-point (point))
+          (called nil))
+      (cl-letf (((symbol-function 'send-to-shell-send-block)
+                 (lambda (&rest _args)
+                   (setq called t))))
+        (send-to-shell-send-region-or-block 'shell)
+        (should called)
+        (should (equal (point) old-point))))))
+
+(ert-deftest send-to-shell-test-send-current-line-errors-without-shell ()
+  "Test sending current line errors when shell is missing."
+  (with-temp-buffer
+    (insert "echo hello\necho world")
+    (goto-char 6)
+    (should-error (send-to-shell-send-current-line 'shell) :type 'user-error)))
 
 (ert-deftest send-to-shell-test-transient-menu-requires-transient ()
   "Test that transient menu dispatcher is callable."
@@ -165,6 +183,25 @@
                    "Start or switch to shell"))
     (should (eq (plist-get (nth 2 suffix) :command)
                 'send-to-shell--transient-start-or-switch-shell))))
+
+(ert-deftest send-to-shell-test-transient-menu-sends-current-line-for-current-backend ()
+  "Test that transient current-line action uses the selected backend."
+  (let ((send-to-shell-default-backend 'shell)
+        (called-backend nil))
+    (cl-letf (((symbol-function 'send-to-shell-send-current-line)
+               (lambda (backend)
+                 (setq called-backend backend))))
+      (send-to-shell--transient-send-current-line)
+      (should (eq called-backend 'shell)))))
+
+(ert-deftest send-to-shell-test-transient-menu-labels-current-line-action ()
+  "Test that transient menu exposes the current-line action."
+  (let ((suffix (transient-get-suffix 'send-to-shell-transient-menu "l")))
+    (should suffix)
+    (should (equal (plist-get (nth 2 suffix) :description)
+                   "Send current line"))
+    (should (eq (plist-get (nth 2 suffix) :command)
+                'send-to-shell--transient-send-current-line))))
 
 (ert-deftest send-to-shell-test-transient-menu-sends-region-or-block-for-current-backend ()
   "Test that transient send action uses the selected backend."
@@ -366,10 +403,10 @@
           (kill-buffer shell-buffer-name))
         (when (get-buffer "*ghostel*")
           (kill-buffer "*ghostel*"))
-        (kill-buffer source-buffer)))))
+        (kill-buffer source-buffer))))
 
-(ert-deftest send-to-shell-test-send-region-to-ghostel-opens-in-other-window ()
-  "Test that first send to ghostel keeps the source buffer visible."
+(ert-deftest send-to-shell-test-send-region-to-ghostel-errors-without-shell ()
+  "Test that sending to ghostel errors when shell is missing."
   (save-window-excursion
     (delete-other-windows)
     (let* ((source-buffer (generate-new-buffer "ghostel-send.sh"))
@@ -393,12 +430,12 @@
                            (setq major-mode 'ghostel-mode)))
                         ((symbol-function 'comint-send-string)
                          (lambda (&rest _args) nil)))
-                (send-to-shell-send-region (point-min) (point-max) 'ghostel)
-                (should (= (count-windows) 2))
+                (should-error (send-to-shell-send-region (point-min) (point-max) 'ghostel)
+                              :type 'user-error)
+                (should (= (count-windows) 1))
                 (should (eq (window-buffer (selected-window)) source-buffer))
-                (should (get-buffer-window shell-buffer-name))
-                (should-not (eq (selected-window)
-                                (get-buffer-window shell-buffer-name))))))
+                (should-not (get-buffer shell-buffer-name))
+                (should-not (get-buffer ghostel-buffer-name))))))
         (when (get-buffer shell-buffer-name)
           (kill-buffer shell-buffer-name))
         (when (get-buffer "*ghostel*")

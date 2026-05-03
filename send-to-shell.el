@@ -63,34 +63,45 @@
 
 ;;; Backend-Specific Implementations
 
+(defun send-to-shell--missing-shell-error (shell-buf-name)
+  "Signal a user error for missing SHELL-BUF-NAME."
+  (user-error "Shell buffer %s does not exist. Start or switch to shell first"
+              shell-buf-name))
+
+(defun send-to-shell--ensure-send-target-exists (backend shell-buf-name)
+  "Ensure BACKEND has an existing SHELL-BUF-NAME before sending."
+  (pcase backend
+    ('shell
+     (unless (comint-check-proc shell-buf-name)
+       (send-to-shell--missing-shell-error shell-buf-name)))
+    (_
+     (unless (get-buffer shell-buf-name)
+       (send-to-shell--missing-shell-error shell-buf-name)))))
+
 (defun send-to-shell--send-to-shell (start end shell-buf-name)
   "Send region to shell buffer."
   (let ((text (buffer-substring start end)))
-    (unless (comint-check-proc shell-buf-name)
-      (send-to-shell--start-named-shell shell-buf-name))
+    (send-to-shell--ensure-send-target-exists 'shell shell-buf-name)
     (ignore-errors
       (comint-send-string shell-buf-name (concat text "\n")))))
 
-(defun send-to-shell--send-via-comint (start end shell-buf-name init-fn)
-  "Send region to buffer via comint, initializing with INIT-FN if needed."
+(defun send-to-shell--send-via-comint (start end shell-buf-name backend)
+  "Send region to buffer for BACKEND via comint."
   (let ((text (buffer-substring start end)))
-    (unless (get-buffer shell-buf-name)
-      (funcall init-fn)
-      (rename-buffer shell-buf-name))
+    (send-to-shell--ensure-send-target-exists backend shell-buf-name)
     (comint-send-string shell-buf-name text)
     (comint-send-string shell-buf-name "\n")))
 
 (defun send-to-shell--send-to-vterm (start end shell-buf-name)
   "Send region to vterm buffer."
   (when (featurep 'vterm)
-    (send-to-shell--send-via-comint start end shell-buf-name
-                                      (lambda () (vterm-other-window)))
+    (send-to-shell--send-via-comint start end shell-buf-name 'vterm)
     (sleep-for 0 send-to-shell-vterm-sleep-ms)))
 
 (defun send-to-shell--send-to-eat (start end shell-buf-name)
   "Send region to eat buffer."
   (when (featurep 'eat)
-    (send-to-shell--send-via-comint start end shell-buf-name #'eat)))
+    (send-to-shell--send-via-comint start end shell-buf-name 'eat)))
 
 (defun send-to-shell--rename-current-buffer-to (shell-buf-name)
   "Rename the current buffer to SHELL-BUF-NAME.
@@ -126,12 +137,17 @@ Replace an existing placeholder buffer with that name when present."
   "Send region to ghostel buffer."
   (when (featurep 'ghostel)
     (let ((text (buffer-substring start end)))
-      (unless (get-buffer shell-buf-name)
-        (send-to-shell--start-named-ghostel-in-other-window shell-buf-name))
+      (send-to-shell--ensure-send-target-exists 'ghostel shell-buf-name)
       (comint-send-string shell-buf-name text)
       (comint-send-string shell-buf-name "\n"))))
 
 ;;; Core Functions
+
+(defun send-to-shell--call-with-point-preserved (fn)
+  "Call FN and restore point afterward."
+  (let ((old-point (point)))
+    (funcall fn)
+    (goto-char old-point)))
 
 (defun send-to-shell-send-region (start end backend)
   "Send region to shell buffer using specified BACKEND.
@@ -146,19 +162,27 @@ START and END define the region to send."
 
 (defun send-to-shell-send-block (backend)
   "Send current block/paragraph to shell using BACKEND."
-  (let ((old-point (point)))
-    (mark-paragraph)
-    (send-to-shell-send-region (region-beginning) (region-end) backend)
-    (goto-char old-point)))
+  (send-to-shell--call-with-point-preserved
+   (lambda ()
+     (mark-paragraph)
+     (send-to-shell-send-region (region-beginning) (region-end) backend))))
 
 (defun send-to-shell-send-region-or-block (backend)
   "Send selected region or current block to shell using BACKEND.
 If a region is active, send it. Otherwise send the current block."
   (if (region-active-p)
-      (let ((old-point (point)))
-        (send-to-shell-send-region (region-beginning) (region-end) backend)
-        (goto-char old-point))
+      (send-to-shell--call-with-point-preserved
+       (lambda ()
+         (send-to-shell-send-region (region-beginning) (region-end) backend)))
     (send-to-shell-send-block backend)))
+
+(defun send-to-shell-send-current-line (backend)
+  "Send the current line to shell using BACKEND."
+  (send-to-shell--call-with-point-preserved
+   (lambda ()
+     (send-to-shell-send-region (line-beginning-position)
+                                (line-end-position)
+                                backend))))
 
 (defun send-to-shell--start-buffer-with-mode (shell-buf-name mode init-fn)
   "Start SHELL-BUF-NAME with MODE by calling INIT-FN when needed."
@@ -252,6 +276,11 @@ If a region is active, send it. Otherwise send the current block."
   (interactive)
   (send-to-shell-send-region-or-block send-to-shell-default-backend))
 
+(defun send-to-shell--transient-send-current-line ()
+  "Send the current line using the transient backend."
+  (interactive)
+  (send-to-shell-send-current-line send-to-shell-default-backend))
+
 (defvar send-to-shell--transient-prefix-command nil
   "Internal transient prefix command for `send-to-shell'.")
 
@@ -261,7 +290,11 @@ If a region is active, send it. Otherwise send the current block."
     ("b" "Switch backend" send-to-shell--transient-select-backend)
     ;; DONE: renamed the transient shell action to Start or switch to shell, and updated the corresponding function name to match the actual behavior when a shell already exists.
     ("s" "Start or switch to shell" send-to-shell--transient-start-or-switch-shell)
-    ("d" "Send region or block" send-to-shell--transient-send-region-or-block)]])
+    ;; DONE: send region, block, or current line now reports a user error and quits when the corresponding shell does not exist.
+    ("d" "Send region or block" send-to-shell--transient-send-region-or-block)
+    ;; DONE: added a transient menu item for sending the current line.
+    ("l" "Send current line" send-to-shell--transient-send-current-line)
+    ]])
 
 (defun send-to-shell ()
   "Main entry point for send-to-shell package.
@@ -288,7 +321,8 @@ Shows an interactive menu (if transient available) or prompts for backend select
   "Prompt user to select an action."
   (let ((actions '(("Send region" . region)
                    ("Send block" . block)
-                   ("Send region or block" . region-or-block))))
+                   ("Send region or block" . region-or-block)
+                   ("Send current line" . current-line))))
     (cdr (assoc (completing-read "Select action: " (mapcar #'car actions) nil t)
                actions))))
 
@@ -298,6 +332,7 @@ Shows an interactive menu (if transient available) or prompts for backend select
     ('region (send-to-shell-send-region (region-beginning) (region-end) backend))
     ('block (send-to-shell-send-block backend))
     ('region-or-block (send-to-shell-send-region-or-block backend))
+    ('current-line (send-to-shell-send-current-line backend))
     (_ (message "Unknown action: %s" action))))
 
 (defun send-to-shell--transient-dispatcher ()
