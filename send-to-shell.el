@@ -255,6 +255,10 @@ If a region is active, send it. Otherwise send the current block."
   (interactive)
   (send-to-shell--transient-set-backend (send-to-shell--select-backend)))
 
+(defun send-to-shell--select-backend-description (&rest _)
+  "Dynamic description for the backend selection menu item."
+  (format "Switch backend (%s)" (symbol-name send-to-shell-default-backend)))
+
 (defun send-to-shell--transient-start-or-switch-shell ()
   "Start or switch to a shell for `send-to-shell-default-backend'."
   (interactive)
@@ -287,13 +291,15 @@ If a region is active, send it. Otherwise send the current block."
 (transient-define-prefix send-to-shell-transient-menu ()
   "Transient menu for send-to-shell."
   [["Backend"
-    ("b" "Switch backend" send-to-shell--transient-select-backend)
+    ;; DONE: similar to ai-code--select-backend-description in ai-code.el, the Switch backend menu item now shows the currently selected backend.
+    ("b" send-to-shell--transient-select-backend
+     :description send-to-shell--select-backend-description)
     ;; DONE: renamed the transient shell action to Start or switch to shell, and updated the corresponding function name to match the actual behavior when a shell already exists.
     ("s" "Start or switch to shell" send-to-shell--transient-start-or-switch-shell)
     ;; DONE: send region, block, or current line now reports a user error and quits when the corresponding shell does not exist.
     ("d" "Send region or block" send-to-shell--transient-send-region-or-block)
     ;; DONE: added a transient menu item for sending the current line.
-    ("l" "Send current line" send-to-shell--transient-send-current-line)
+    ("n" "Send current line" send-to-shell--transient-send-current-line)
     ]])
 
 (defun send-to-shell ()

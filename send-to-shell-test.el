@@ -153,6 +153,21 @@
     (send-to-shell--transient-set-backend 'shell)
     (should (eq send-to-shell-default-backend 'shell))))
 
+(ert-deftest send-to-shell-test-transient-menu-describes-current-backend ()
+  "Test that transient menu describes the currently selected backend."
+  (let ((send-to-shell-default-backend 'eat))
+    (should (equal (send-to-shell--select-backend-description)
+                   "Switch backend (eat)"))))
+
+(ert-deftest send-to-shell-test-transient-menu-labels-backend-action-dynamically ()
+  "Test that transient menu uses a dynamic description for backend selection."
+  (let ((suffix (transient-get-suffix 'send-to-shell-transient-menu "b")))
+    (should suffix)
+    (should (eq (plist-get (nth 2 suffix) :command)
+                'send-to-shell--transient-select-backend))
+    (should (eq (plist-get (nth 2 suffix) :description)
+                'send-to-shell--select-backend-description))))
+
 (ert-deftest send-to-shell-test-select-backend-does-not-prefill-default-value ()
   "Test that backend selection shows choices without a default value."
   (let ((captured-initial-input :unset))
