@@ -309,5 +309,18 @@ If a region is active, send it. Otherwise send the current block."
     (intern (completing-read "Select shell backend: " backend-names
                              nil t nil nil nil))))
 
+;; DONE: similar to /home/tninja/.emacs.d/.emacs/languages.el, added an interactive function to register sh-mode keybindings for switch-to-shell, send-current-line, and send-region-or-block.
+
+(defun send-to-shell-register-sh-mode-keybindings ()
+  "Register send-to-shell keybindings for `sh-mode'."
+  (interactive)
+  (require 'sh-script)
+  (define-key sh-mode-map (kbd "C-c C-z")
+              #'send-to-shell--transient-start-or-switch-shell)
+  (define-key sh-mode-map (kbd "C-c C-n")
+              #'send-to-shell--transient-send-current-line)
+  (define-key sh-mode-map (kbd "C-c C-c")
+              #'send-to-shell--transient-send-region-or-block))
+
 (provide 'send-to-shell)
 ;;; send-to-shell.el ends here
