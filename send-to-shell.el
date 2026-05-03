@@ -309,23 +309,5 @@ If a region is active, send it. Otherwise send the current block."
     (intern (completing-read "Select shell backend: " backend-names
                              nil t nil nil nil))))
 
-(defun send-to-shell--select-action ()
-  "Prompt user to select an action."
-  (let ((actions '(("Send region" . region)
-                   ("Send block" . block)
-                   ("Send region or block" . region-or-block)
-                   ("Send current line" . current-line))))
-    (cdr (assoc (completing-read "Select action: " (mapcar #'car actions) nil t)
-               actions))))
-
-(defun send-to-shell--perform-action (action backend)
-  "Perform the selected ACTION using the specified BACKEND."
-  (pcase action
-    ('region (send-to-shell-send-region (region-beginning) (region-end) backend))
-    ('block (send-to-shell-send-block backend))
-    ('region-or-block (send-to-shell-send-region-or-block backend))
-    ('current-line (send-to-shell-send-current-line backend))
-    (_ (message "Unknown action: %s" action))))
-
 (provide 'send-to-shell)
 ;;; send-to-shell.el ends here
