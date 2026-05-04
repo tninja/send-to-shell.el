@@ -30,7 +30,7 @@ The primary entry point for send-to-shell is the interactive command:
 
 This shows an interactive menu where you can select:
 - A shell backend (shell, vterm, eat, ghostel)
-- An action (send region, send block, or send region-or-block)
+- An action (start or switch to shell, send region or block, or send current line)
 
 *** Core Functions
 
@@ -56,6 +56,23 @@ Send the active region if one exists, otherwise send the current block.
 
 #+begin_src emacs-lisp
 (send-to-shell-send-region-or-block 'shell)
+#+end_src
+
+**** send-to-shell-send-current-line (backend)
+
+Send the current line to the specified shell backend.
+
+#+begin_src emacs-lisp
+(send-to-shell-send-current-line 'shell)
+#+end_src
+
+**** send-to-shell-start-shell (backend)
+
+Start or switch to the shell buffer for the current source buffer.
+This command must be called from =sh-mode=.
+
+#+begin_src emacs-lisp
+(send-to-shell-start-shell 'shell)
 #+end_src
 
 *** Backend Management
@@ -97,6 +114,7 @@ Full terminal emulator. Requires =emacs-libvterm= package.
 
 *** eat
 Terminal emulator implementation. Requires =eat= package.
+The package is loaded on demand when available.
 
 *** ghostel
 Alternative terminal backend. Requires =ghostel= package.
@@ -107,13 +125,21 @@ Add to your Emacs configuration to set up key bindings:
 
 #+begin_src emacs-lisp
 ;; Open send-to-shell menu
-(global-set-key (kbd "C-c s") 'send-to-shell)
+(global-set-key (kbd "C-c C-s") 'send-to-shell)
 
-;; Or set for specific modes
-(define-key sh-mode-map (kbd "C-c C-z") 'send-to-shell)
+;; Or register the built-in sh-mode bindings
+(send-to-shell-register-sh-mode-keybindings)
+
+;; Equivalent sh-mode bindings installed by the helper above:
+;; C-c C-s -> send-to-shell
+;; C-c C-z -> start or switch to shell
+;; C-c C-n -> send current line
+;; C-c C-c -> send region or block
 #+end_src
+
+When using the transient menu, the =Start or switch to shell= action
+selects the shell window after opening or switching to it.
 
 ** License
 
 See LICENSE file in the repository.
-

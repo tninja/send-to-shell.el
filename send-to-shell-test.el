@@ -208,6 +208,33 @@
       (send-to-shell--transient-start-or-switch-shell)
       (should (eq called-backend 'shell)))))
 
+(ert-deftest send-to-shell-test-transient-menu-switches-to-shell-buffer ()
+  "Test that transient start-or-switch-shell selects the shell window."
+  (save-window-excursion
+    (delete-other-windows)
+    (let* ((send-to-shell-default-backend 'shell)
+           (source-buffer (generate-new-buffer "transient-source.sh"))
+           (shell-buffer-name "*transient-source.sh*"))
+      (unwind-protect
+          (progn
+            (set-window-buffer (selected-window) source-buffer)
+            (with-current-buffer source-buffer
+              (cl-letf (((symbol-function 'send-to-shell-start-shell)
+                         (lambda (_backend)
+                           (let ((shell-window
+                                  (display-buffer
+                                   (get-buffer-create shell-buffer-name)
+                                   '((display-buffer-pop-up-window)
+                                     (inhibit-same-window . t)))))
+                             (set-window-buffer shell-window
+                                                (get-buffer shell-buffer-name))))))
+                (send-to-shell--transient-start-or-switch-shell)
+                (should (eq (window-buffer (selected-window))
+                            (get-buffer shell-buffer-name))))))
+        (when (get-buffer shell-buffer-name)
+          (kill-buffer shell-buffer-name))
+        (kill-buffer source-buffer)))))
+
 (ert-deftest send-to-shell-test-transient-menu-labels-shell-action-as-start-or-switch ()
   "Test that transient menu labels the shell action as start or switch."
   (send-to-shell-test--require-transient)

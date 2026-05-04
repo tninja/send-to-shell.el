@@ -310,7 +310,10 @@ If a region is active, send it. Otherwise send the current block."
 (defun send-to-shell--transient-start-or-switch-shell ()
   "Start or switch to a shell for `send-to-shell-default-backend'."
   (interactive)
-  (send-to-shell-start-shell send-to-shell-default-backend))
+  (let ((shell-buf-name (send-to-shell-get-shell-buffer-name)))
+    (send-to-shell-start-shell send-to-shell-default-backend)
+    (when-let ((shell-window (get-buffer-window shell-buf-name t)))
+      (select-window shell-window))))
 
 (defun send-to-shell--transient-send-region ()
   "Send the active region using `send-to-shell-default-backend'."
@@ -344,6 +347,7 @@ If a region is active, send it. Otherwise send the current block."
        ("b" send-to-shell--transient-select-backend
         :description send-to-shell--select-backend-description)
        ;; DONE: renamed the transient shell action to Start or switch to shell, and updated the corresponding function name to match the actual behavior when a shell already exists.
+       ;; DONE: after send-to-shell--transient-start-or-switch-shell, the cursor switches to the shell buffer instead of staying in the source buffer.
        ("z" "Start or switch to shell" send-to-shell--transient-start-or-switch-shell)
        ;; DONE: send region, block, or current line now reports a user error and quits when the corresponding shell does not exist.
        ("c" "Send region or block" send-to-shell--transient-send-region-or-block)
