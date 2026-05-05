@@ -311,6 +311,7 @@ If a region is active, send it. Otherwise send the current block."
   "Start or switch to a shell for `send-to-shell-default-backend'."
   (interactive)
   (let ((shell-buf-name (send-to-shell-get-shell-buffer-name)))
+    (send-to-shell--load-feature-if-available send-to-shell-default-backend)
     (send-to-shell-start-shell send-to-shell-default-backend)
     (when-let ((shell-window (get-buffer-window shell-buf-name t)))
       (select-window shell-window))))
@@ -327,9 +328,14 @@ If a region is active, send it. Otherwise send the current block."
   (send-to-shell-send-block send-to-shell-default-backend))
 
 (defun send-to-shell--transient-send-region-or-block ()
-  "Send the active region or current block using the transient backend."
+  "Send the active region or current block using the transient backend.
+Start the shell first when it does not exist, wait 0.5 sec, then send."
   (interactive)
-  (send-to-shell-send-region-or-block send-to-shell-default-backend))
+  (let ((shell-buf-name (send-to-shell-get-shell-buffer-name)))
+    (unless (get-buffer shell-buf-name)
+      (send-to-shell-start-shell send-to-shell-default-backend)
+      (sit-for 0.5))
+    (send-to-shell-send-region-or-block send-to-shell-default-backend)))
 
 (defun send-to-shell--transient-send-current-line ()
   "Send the current line using the transient backend."
@@ -348,8 +354,10 @@ If a region is active, send it. Otherwise send the current block."
         :description send-to-shell--select-backend-description)
        ;; DONE: renamed the transient shell action to Start or switch to shell, and updated the corresponding function name to match the actual behavior when a shell already exists.
        ;; DONE: after send-to-shell--transient-start-or-switch-shell, the cursor switches to the shell buffer instead of staying in the source buffer.
+       ;; DONE: when the package (such as ghostel) for corresponding backend installed but not loaded, it should load/require that
        ("z" "Start or switch to shell" send-to-shell--transient-start-or-switch-shell)
        ;; DONE: send region, block, or current line now reports a user error and quits when the corresponding shell does not exist.
+       ;; DONE: for Send region or block, when the corresponding shell doesn't exist, it should start it firstly, wait for 0.5 sec, and then perform this
        ("c" "Send region or block" send-to-shell--transient-send-region-or-block)
        ;; DONE: added a transient menu item for sending the current line.
        ("n" "Send current line" send-to-shell--transient-send-current-line)
