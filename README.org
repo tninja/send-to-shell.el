@@ -2,6 +2,8 @@
 
 A unified Emacs package for sending code to shell buffers with support for multiple backends: shell, vterm, eat, and ghostel.
 
+[[file:./send_to_shell.png]]
+
 ** Features
 
 - *Multiple shell backends*: Support for shell, vterm, eat, and ghostel
