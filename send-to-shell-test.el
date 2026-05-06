@@ -155,6 +155,21 @@
     (goto-char 6)
     (should-error (send-to-shell-send-current-line 'shell) :type 'user-error)))
 
+(ert-deftest send-to-shell-test-send-current-buffer-sends-entire-buffer ()
+  "Test sending the current buffer uses the whole buffer."
+  (with-temp-buffer
+    (insert "echo hello\necho world")
+    (goto-char 6)
+    (let ((old-point (point))
+          (captured-args nil))
+      (cl-letf (((symbol-function 'send-to-shell-send-region)
+                 (lambda (start end backend)
+                   (setq captured-args (list start end backend)))))
+        (send-to-shell-send-current-buffer 'shell)
+        (should (equal captured-args
+                       (list (point-min) (point-max) 'shell)))
+        (should (equal (point) old-point))))))
+
 (ert-deftest send-to-shell-test-transient-menu-requires-transient ()
   "Test that transient menu dispatcher is callable."
   ;; Just verify the function exists and is callable
@@ -256,6 +271,16 @@
       (send-to-shell--transient-send-current-line)
       (should (eq called-backend 'shell)))))
 
+(ert-deftest send-to-shell-test-transient-menu-sends-current-buffer-for-current-backend ()
+  "Test that transient current-buffer action uses the selected backend."
+  (let ((send-to-shell-default-backend 'shell)
+        (called-backend nil))
+    (cl-letf (((symbol-function 'send-to-shell-send-current-buffer)
+               (lambda (backend)
+                 (setq called-backend backend))))
+      (send-to-shell--transient-send-current-buffer)
+      (should (eq called-backend 'shell)))))
+
 (ert-deftest send-to-shell-test-transient-menu-labels-current-line-action ()
   "Test that transient menu exposes the current-line action."
   (send-to-shell-test--require-transient)
@@ -266,6 +291,17 @@
                    "Send current line"))
     (should (eq (plist-get props :command)
                 'send-to-shell--transient-send-current-line))))
+
+(ert-deftest send-to-shell-test-transient-menu-labels-current-buffer-action ()
+  "Test that transient menu exposes the current-buffer action."
+  (send-to-shell-test--require-transient)
+  (let* ((suffix (transient-get-suffix 'send-to-shell-transient-menu "B"))
+         (props (send-to-shell-test--suffix-properties suffix)))
+    (should suffix)
+    (should (equal (plist-get props :description)
+                   "Send current buffer"))
+    (should (eq (plist-get props :command)
+                'send-to-shell--transient-send-current-buffer))))
 
 (ert-deftest send-to-shell-test-transient-menu-sends-region-or-block-for-current-backend ()
   "Test that transient send action uses the selected backend."

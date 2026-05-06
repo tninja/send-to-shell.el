@@ -217,6 +217,12 @@ If a region is active, send it. Otherwise send the current block."
                                 (line-end-position)
                                 backend))))
 
+(defun send-to-shell-send-current-buffer (backend)
+  "Send the current buffer to shell using BACKEND."
+  (send-to-shell--call-with-point-preserved
+   (lambda ()
+     (send-to-shell-send-region (point-min) (point-max) backend))))
+
 (defun send-to-shell--start-shell-backend (shell-buf-name)
   "Start the shell backend using SHELL-BUF-NAME."
   (send-to-shell--start-buffer-with-mode-in-other-window
@@ -331,6 +337,11 @@ Start the shell first when it does not exist, wait 0.5 sec, then send."
   (interactive)
   (send-to-shell-send-current-line send-to-shell-default-backend))
 
+(defun send-to-shell--transient-send-current-buffer ()
+  "Send the current buffer using the transient backend."
+  (interactive)
+  (send-to-shell-send-current-buffer send-to-shell-default-backend))
+
 (defvar send-to-shell--transient-prefix-command nil
   "Internal transient prefix command for `send-to-shell'.")
 
@@ -338,11 +349,12 @@ Start the shell first when it does not exist, wait 0.5 sec, then send."
   '(transient-define-prefix send-to-shell-transient-menu ()
      "Transient menu for send-to-shell."
      [["Backend"
-       ("b" send-to-shell--transient-select-backend
+       ("s" send-to-shell--transient-select-backend
         :description send-to-shell--select-backend-description)
        ("z" "Start or switch to shell" send-to-shell--transient-start-or-switch-shell)
        ("c" "Send region or block" send-to-shell--transient-send-region-or-block)
        ("n" "Send current line" send-to-shell--transient-send-current-line)
+       ("b" "Send current buffer" send-to-shell--transient-send-current-buffer)
        ]]))
 
 (defun send-to-shell ()
@@ -371,7 +383,8 @@ Shows an interactive menu (if transient available) or prompts for backend select
   (let ((actions '(("Send region" . region)
                    ("Send block" . block)
                    ("Send region or block" . region-or-block)
-                   ("Send current line" . current-line))))
+                   ("Send current line" . current-line)
+                   ("Send current buffer" . current-buffer))))
     (cdr (assoc (completing-read "Select action: " (mapcar #'car actions) nil t)
                 actions))))
 
@@ -382,6 +395,7 @@ Shows an interactive menu (if transient available) or prompts for backend select
     ('block (send-to-shell-send-block backend))
     ('region-or-block (send-to-shell-send-region-or-block backend))
     ('current-line (send-to-shell-send-current-line backend))
+    ('current-buffer (send-to-shell-send-current-buffer backend))
     (_ (message "Unknown action: %s" action))))
 
 (defun send-to-shell--transient-dispatcher ()
@@ -398,6 +412,8 @@ Shows an interactive menu (if transient available) or prompts for backend select
               #'send-to-shell--transient-start-or-switch-shell)
   (define-key sh-mode-map (kbd "C-c C-n")
               #'send-to-shell--transient-send-current-line)
+  (define-key sh-mode-map (kbd "C-c C-b")
+              #'send-to-shell--transient-send-current-buffer)
   (define-key sh-mode-map (kbd "C-c C-c")
               #'send-to-shell--transient-send-region-or-block))
 
