@@ -7,14 +7,6 @@
 
 ;;; Code:
 
-;; DONE: ghostel backend start shell now starts in other window without overlapping the source buffer. See /home/tninja/.emacs.d/elpa/ghostel-20260502.2158 for upstream window behavior details.
-
-;; TODO: ghostel backend start report wrong number of argument, 5
-
-;; DONE: the eat backend now loads the eat library on demand and starts it in another window, so start shell no longer silently does nothing when eat is installed but not yet loaded.
-
-;; DONE: eat started buffer now gets renamed from *eat* to the source buffer name, so if the source buffer is test.sh the eat buffer becomes *test.sh*.
-
 (defgroup send-to-shell nil
   "Send code to shell buffers with multiple backends."
   :group 'tools
@@ -285,9 +277,6 @@ If a region is active, send it. Otherwise send the current block."
 
 (defun send-to-shell-start-shell (backend)
   "Start a shell buffer for the current buffer using BACKEND."
-  ;; DONE: shell should start in other window. It shouldn't overlap the source buffer.
-  ;; DONE: to use this command, current buffer major mode must be sh-mode, otherwise, just let user know the error
-  ;; DONE: started shell should have the same name as the source buffer, but with * around it. For example, if source buffer is test.sh, shell buffer should be *test.sh*. And corresponding send to shell command should send to *test.sh* buffer.
   (interactive (list send-to-shell-default-backend))
   (send-to-shell--ensure-sh-mode)
   (let ((shell-buf-name (send-to-shell-get-shell-buffer-name)))
@@ -349,17 +338,10 @@ Start the shell first when it does not exist, wait 0.5 sec, then send."
   '(transient-define-prefix send-to-shell-transient-menu ()
      "Transient menu for send-to-shell."
      [["Backend"
-       ;; DONE: similar to ai-code--select-backend-description in ai-code.el, the Switch backend menu item now shows the currently selected backend.
        ("b" send-to-shell--transient-select-backend
         :description send-to-shell--select-backend-description)
-       ;; DONE: renamed the transient shell action to Start or switch to shell, and updated the corresponding function name to match the actual behavior when a shell already exists.
-       ;; DONE: after send-to-shell--transient-start-or-switch-shell, the cursor switches to the shell buffer instead of staying in the source buffer.
-       ;; DONE: when the package (such as ghostel) for corresponding backend installed but not loaded, it should load/require that
        ("z" "Start or switch to shell" send-to-shell--transient-start-or-switch-shell)
-       ;; DONE: send region, block, or current line now reports a user error and quits when the corresponding shell does not exist.
-       ;; DONE: for Send region or block, when the corresponding shell doesn't exist, it should start it firstly, wait for 0.5 sec, and then perform this
        ("c" "Send region or block" send-to-shell--transient-send-region-or-block)
-       ;; DONE: added a transient menu item for sending the current line.
        ("n" "Send current line" send-to-shell--transient-send-current-line)
        ]]))
 
@@ -405,8 +387,6 @@ Shows an interactive menu (if transient available) or prompts for backend select
 (defun send-to-shell--transient-dispatcher ()
   "Dispatcher for the transient menu."
   (send-to-shell-transient-menu))
-
-;; DONE: similar to /home/tninja/.emacs.d/.emacs/languages.el, added an interactive function to register sh-mode keybindings for switch-to-shell, send-current-line, and send-region-or-block.
 
 (defun send-to-shell-register-sh-mode-keybindings ()
   "Register send-to-shell keybindings for `sh-mode'."
